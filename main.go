@@ -1,135 +1,42 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
+	"context"
+	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"os/signal"
 
-	"github.com/go-chi/chi"
+	"github.com/AdamBrutsaert/basic-go-http-server/internal/store"
 )
 
-func getItems(store *Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		items := store.GetItems()
-		err := json.NewEncoder(w).Encode(items)
-
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}
-}
-
-func getItem(store *Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "id"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		item, ok := store.GetItem(id)
-		if !ok {
-			http.Error(w, "item not found", http.StatusNotFound)
-			return
-		}
-
-		err = json.NewEncoder(w).Encode(item)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}
-}
-
-func addItem(store *Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var item Item
-		err := json.NewDecoder(r.Body).Decode(&item)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		store.AddItem(item)
-		w.WriteHeader(http.StatusCreated)
-	}
-}
-
-func updateItem(store *Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "id"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		var item Item
-		err = json.NewDecoder(r.Body).Decode(&item)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		ok := store.UpdateItem(id, item)
-		if !ok {
-			http.Error(w, "item not found", http.StatusNotFound)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func deleteItem(store *Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(chi.URLParam(r, "id"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		ok := store.DeleteItem(id)
-		if !ok {
-			http.Error(w, "item not found", http.StatusNotFound)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("[%s] %s %s\n", r.RemoteAddr, r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
-}
-
 func main() {
-	store := NewStore()
+	store := store.New()
 
-	r := chi.NewRouter()
-	r.Use(loggingMiddleware)
-	r.Route("/items", func(r chi.Router) {
-		r.Get("/", getItems(store))
-		r.Post("/", addItem(store))
-		r.Get("/{id}", getItem(store))
-		r.Put("/{id}", updateItem(store))
-		r.Delete("/{id}", deleteItem(store))
-	})
+	mux := http.NewServeMux()
+	initItemRoutes(mux, store)
 
-	server := &http.Server{
+	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: r,
+		Handler: mux,
 	}
 
-	err := server.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed) {
-		fmt.Printf("server closed\n")
-	} else if err != nil {
-		fmt.Printf("error starting server: %s\n", err)
-		os.Exit(1)
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, os.Kill)
+		<-sigint
+
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("HTTP server Shutdown: %v", err)
+		}
+
+		close(idleConnsClosed)
+	}()
+
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatalf("HTTP server ListenAndServe: %v", err)
 	}
+
+	<-idleConnsClosed
 }

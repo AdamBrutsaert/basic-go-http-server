@@ -1,11 +1,6 @@
-package main
+package store
 
 import "sync"
-
-type Item struct {
-	Name  string `json:"name"`
-	Price int    `json:"price"`
-}
 
 type Store struct {
 	mu     sync.RWMutex
@@ -13,7 +8,7 @@ type Store struct {
 	items  map[int]Item
 }
 
-func NewStore() *Store {
+func New() *Store {
 	return &Store{
 		mu:     sync.RWMutex{},
 		items:  map[int]Item{},
