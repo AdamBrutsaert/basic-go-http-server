@@ -104,3 +104,9 @@ func initItemRoutes(mux *http.ServeMux, store *intstore.Store) {
 	mux.HandleFunc("PUT /items/{id}", loggingMiddleware(updateItem(store)))
 	mux.HandleFunc("DELETE /items/{id}", loggingMiddleware(deleteItem(store)))
 }
+
+func newRouter(store *intstore.Store) *http.ServeMux {
+	mux := http.NewServeMux()
+	initItemRoutes(mux, store)
+	return mux
+}

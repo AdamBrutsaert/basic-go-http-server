@@ -13,12 +13,9 @@ import (
 func main() {
 	store := store.New()
 
-	mux := http.NewServeMux()
-	initItemRoutes(mux, store)
-
 	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: mux,
+		Handler: newRouter(store),
 	}
 
 	idleConnsClosed := make(chan struct{})
