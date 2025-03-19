@@ -22,7 +22,7 @@ func TestItemHandlers(t *testing.T) {
 		t.Errorf("expected status code 201, got %d", rec.Code)
 	}
 
-	req = httptest.NewRequest("GET", "/items", nil)
+	req = httptest.NewRequest("GET", "/items/", nil)
 	rec = httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)

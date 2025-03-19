@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/AdamBrutsaert/basic-go-http-server/internal/mux"
 	intstore "github.com/AdamBrutsaert/basic-go-http-server/internal/store"
 )
 
@@ -97,16 +98,18 @@ func deleteItem(store *intstore.Store) http.HandlerFunc {
 	}
 }
 
-func initItemRoutes(mux *http.ServeMux, store *intstore.Store) {
-	mux.HandleFunc("GET /items", loggingMiddleware(getItems(store)))
-	mux.HandleFunc("GET /items/{id}", loggingMiddleware(getItem(store)))
-	mux.HandleFunc("POST /items", loggingMiddleware(addItem(store)))
-	mux.HandleFunc("PUT /items/{id}", loggingMiddleware(updateItem(store)))
-	mux.HandleFunc("DELETE /items/{id}", loggingMiddleware(deleteItem(store)))
+func newItemsRouter(store *intstore.Store) *mux.MiddlewareMux {
+	mux := mux.NewMiddlewareMux(loggingMiddleware)
+	mux.HandleFunc("GET /", getItems(store))
+	mux.HandleFunc("GET /{id}", getItem(store))
+	mux.HandleFunc("POST /", addItem(store))
+	mux.HandleFunc("PUT /{id}", updateItem(store))
+	mux.HandleFunc("DELETE /{id}", deleteItem(store))
+	return mux
 }
 
-func newRouter(store *intstore.Store) *http.ServeMux {
-	mux := http.NewServeMux()
-	initItemRoutes(mux, store)
+func newRouter(store *intstore.Store) *mux.PrefixMux {
+	mux := mux.NewPrefixMux()
+	mux.Handle("/items", newItemsRouter(store))
 	return mux
 }
